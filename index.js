@@ -48,7 +48,7 @@ const CLIENT_BUILD_PATH = path.join(__dirname, '..', 'dist');
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
 app.use(cors({
-  origin: "https://adorable-fenglisu-331647.netlify.app",
+  origin: ["https://adorable-fenglisu-331647.netlify.app", "http://localhost:5173"],
   credentials: true  // if using cookies or auth headers
 }));
 app.use(express.json());
