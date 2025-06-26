@@ -1,5 +1,13 @@
 # Deployment Instructions for White Whaling Server
 
+## Important Directory Structure Update
+
+This server now uses a new directory structure for uploads:
+
+- Uploads are stored in `/server/public/uploads/` (inside this server directory)
+- This change ensures images work correctly when deploying to Render
+- No additional configuration is needed; the server will create this directory automatically
+
 ## Environment Variables for Render Deployment
 
 Make sure to set the following environment variables in your Render dashboard for the server:

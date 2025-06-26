@@ -102,29 +102,62 @@ app.use(session({
   }
 }));
 
-// Create the public directory and uploads directory
-const publicDir = path.join(__dirname, '..', 'public');
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir, { recursive: true });
-  console.log(`Created public directory at: ${publicDir}`);
+// Create server-specific directories for uploads
+const serverPublicDir = path.join(__dirname, 'public');
+if (!fs.existsSync(serverPublicDir)) {
+  fs.mkdirSync(serverPublicDir, { recursive: true });
+  console.log(`Created server public directory at: ${serverPublicDir}`);
 }
 
-const uploadsDir = path.join(publicDir, 'uploads');
+const uploadsDir = path.join(serverPublicDir, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
   console.log(`Created uploads directory at: ${uploadsDir}`);
 }
 
+// Check if there's an old uploads directory to migrate files from
+const oldUploadsDir = path.join(__dirname, '..', 'public', 'uploads');
+if (fs.existsSync(oldUploadsDir)) {
+  try {
+    console.log(`Found old uploads directory at: ${oldUploadsDir}, migrating files...`);
+    const files = fs.readdirSync(oldUploadsDir);
+    for (const file of files) {
+      const sourcePath = path.join(oldUploadsDir, file);
+      const destPath = path.join(uploadsDir, file);
+      if (!fs.existsSync(destPath)) {
+        fs.copyFileSync(sourcePath, destPath);
+        console.log(`Migrated file: ${file}`);
+      }
+    }
+    console.log(`Migration complete. Migrated ${files.length} files.`);
+  } catch (err) {
+    console.error('Error migrating files:', err);
+  }
+}
+
 // Serve static files - IMPORTANT: Order matters! More specific paths first
-app.use('/uploads', express.static(path.join(publicDir, 'uploads'), {
+app.use('/uploads', express.static(uploadsDir, {
   setHeaders: (res, filePath) => {
+    // Add comprehensive CORS headers specifically for image files
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Allow access from any origin for images
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
     res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year in seconds
-    console.log(`Serving image: ${filePath}`);
+    console.log(`Serving image with CORS headers: ${filePath}`);
   }
 }));
 
-// Then serve the general public directory
-app.use(express.static(publicDir));
+// Then serve the server public directory
+app.use(express.static(serverPublicDir, {
+  setHeaders: (res, filePath) => {
+    // Add CORS headers to all static files
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+  }
+}));
 
 // Connect to MongoDB with proper error handling
 console.log(`Connecting to MongoDB: ${MONGODB_URI.substring(0, MONGODB_URI.indexOf('@') + 1)}***`);
@@ -171,13 +204,53 @@ if (!isDevelopment) {
 app.get('/api/debug/dirs', (req, res) => {
   const dirs = {
     __dirname,
-    publicDir,
+    serverPublicDir,
     uploadsDir,
-    publicExists: fs.existsSync(publicDir),
+    serverPublicExists: fs.existsSync(serverPublicDir),
     uploadsExists: fs.existsSync(uploadsDir),
-    files: fs.existsSync(uploadsDir) ? fs.readdirSync(uploadsDir) : []
+    files: fs.existsSync(uploadsDir) ? fs.readdirSync(uploadsDir) : [],
+    absolutePath: path.resolve(uploadsDir)
   };
   res.json(dirs);
+});
+
+// Debug route for checking uploads
+app.get('/api/debug/uploads', (req, res) => {
+  try {
+    // Check for uploads directory
+    const exists = fs.existsSync(uploadsDir);
+    const files = exists ? fs.readdirSync(uploadsDir) : [];
+    
+    // Check a few specific files
+    const testFiles = [
+      'image-1749544361570-986383008.png',
+      'image-1749623997248-227314902.png',
+      'image-1749625168144-22339219.jpeg'
+    ];
+    
+    const fileChecks = testFiles.map(file => {
+      const filePath = path.join(uploadsDir, file);
+      const fileExists = fs.existsSync(filePath);
+      const stats = fileExists ? fs.statSync(filePath) : null;
+      
+      return {
+        filename: file,
+        exists: fileExists,
+        size: stats ? stats.size : null,
+        fullPath: filePath
+      };
+    });
+    
+    res.json({
+      uploadsPath: uploadsDir,
+      exists,
+      fileCount: files.length,
+      sampleFiles: files.slice(0, 10),
+      specificFileChecks: fileChecks
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Try multiple ports if the default is in use
