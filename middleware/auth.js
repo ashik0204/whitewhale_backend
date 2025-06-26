@@ -1,18 +1,50 @@
 // Authentication middleware
+import jwt from 'jsonwebtoken';
 
-// Check if user is authenticated
+// Check if user is authenticated - using session or JWT token
 export const isAuthenticated = (req, res, next) => {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ message: 'Not authenticated' });
+  console.log("isAuthenticated middleware called");
+  console.log("Session exists:", !!req.session);
+  console.log("Session ID:", req.sessionID);
+  console.log("Session user:", req.session?.user);
+  console.log("Headers:", req.headers);
+  
+  // Try to authenticate with session first
+  if (req.session && req.session.user) {
+    console.log("User found in session");
+    req.user = {
+      id: req.session.user.id || req.session.user._id,
+      username: req.session.user.username,
+      role: req.session.user.role
+    };
+    return next();
   }
   
-  // Add user info to request
-  req.user = {
-    id: req.session.user._id,
-    username: req.session.user.username
-  };
+  // If no session, try JWT token authentication
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    const jwtSecret = process.env.JWT_SECRET || 'jwt_fallback_secret';
+    
+    try {
+      const decoded = jwt.verify(token, jwtSecret);
+      console.log("JWT token authenticated:", decoded);
+      
+      req.user = {
+        id: decoded.id,
+        username: decoded.username,
+        role: decoded.role
+      };
+      
+      return next();
+    } catch (err) {
+      console.log("JWT verification failed:", err.message);
+      // Continue to check other auth methods
+    }
+  }
   
-  next();
+  console.log("Authentication failed - no valid session or token");
+  return res.status(401).json({ message: 'Not authenticated' });
 };
 
 // Check if user is admin

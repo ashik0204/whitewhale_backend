@@ -1,6 +1,7 @@
 import express from 'express';
 import User from '../models/User.js';
 import { isAuthenticated, isAdmin } from '../middleware/auth.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
@@ -39,38 +40,55 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     
+    console.log("Login attempt:", email);
+    
     // Find user by email
     const user = await User.findOne({ email });
     if (!user) {
+      console.log("Login failed - user not found:", email);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      console.log("Login failed - invalid password for:", email);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     
-    // Set user in session
-    req.session.user = {
+    console.log("Login successful for:", user.username, "Role:", user.role);
+    
+    // Create a JWT token
+    const tokenPayload = {
       id: user._id,
       username: user.username,
       email: user.email,
       role: user.role
     };
     
+    // Use a default secret if JWT_SECRET is not set
+    const jwtSecret = process.env.JWT_SECRET || 'jwt_fallback_secret';
+    
+    // Generate JWT token
+    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '7d' });
+    
+    // Set user in session as well (dual authentication approach)
+    req.session.user = tokenPayload;
+    
     // Explicitly save the session before sending the response
     req.session.save(err => {
       if (err) {
         console.error("Session save error:", err);
-        return res.status(500).json({ message: 'Session error', error: err.message });
+        // Continue anyway as we have JWT as backup
       }
       
       console.log("Session saved successfully for user:", user.username);
       console.log("Session ID:", req.sessionID);
       
+      // Send both session cookie and JWT token for redundancy
       res.json({
         message: 'Login successful',
+        token: token, // Send JWT token to client
         user: {
           id: user._id,
           username: user.username,
@@ -80,22 +98,18 @@ router.post('/login', async (req, res) => {
       });
     });
   } catch (error) {
+    console.error("Login error:", error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-// Get current user - removed isAuthenticated middleware to debug
-router.get('/me', (req, res) => {
-  console.log("GET /api/auth/me called");
+// Get current user with authentication check
+router.get('/me', isAuthenticated, (req, res) => {
+  console.log("GET /api/auth/me called - passed isAuthenticated middleware");
   console.log("Session exists:", !!req.session);
   console.log("Session ID:", req.sessionID);
   console.log("Session user:", req.session?.user);
   console.log("Cookies:", req.headers.cookie);
-  
-  if (!req.session || !req.session.user) {
-    console.log("No authenticated user found in session");
-    return res.status(401).json({ message: 'Not authenticated' });
-  }
   
   // Clone the session user object
   const user = {...req.session.user};
@@ -166,8 +180,23 @@ router.post('/admin-register', async (req, res) => {
       role: newUser.role
     };
     
-    // Return user data
+    // Create a JWT token for the new admin/editor user
+    const tokenPayload = {
+      id: newUser._id,
+      username: newUser.username,
+      email: newUser.email,
+      role: newUser.role
+    };
+    
+    // Use a default secret if JWT_SECRET is not set
+    const jwtSecret = process.env.JWT_SECRET || 'jwt_fallback_secret';
+    
+    // Generate JWT token
+    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '7d' });
+    
+    // Return user data and token
     res.status(201).json({
+      token: token,
       user: {
         _id: newUser._id,
         username: newUser.username,
