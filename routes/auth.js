@@ -59,22 +59,44 @@ router.post('/login', async (req, res) => {
       role: user.role
     };
     
-    res.json({
-      message: 'Login successful',
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role
+    // Explicitly save the session before sending the response
+    req.session.save(err => {
+      if (err) {
+        console.error("Session save error:", err);
+        return res.status(500).json({ message: 'Session error', error: err.message });
       }
+      
+      console.log("Session saved successfully for user:", user.username);
+      console.log("Session ID:", req.sessionID);
+      
+      res.json({
+        message: 'Login successful',
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role
+        }
+      });
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-// Get current user
-router.get('/me', isAuthenticated, (req, res) => {
+// Get current user - removed isAuthenticated middleware to debug
+router.get('/me', (req, res) => {
+  console.log("GET /api/auth/me called");
+  console.log("Session exists:", !!req.session);
+  console.log("Session ID:", req.sessionID);
+  console.log("Session user:", req.session?.user);
+  console.log("Cookies:", req.headers.cookie);
+  
+  if (!req.session || !req.session.user) {
+    console.log("No authenticated user found in session");
+    return res.status(401).json({ message: 'Not authenticated' });
+  }
+  
   // Clone the session user object
   const user = {...req.session.user};
   
@@ -85,6 +107,7 @@ router.get('/me', isAuthenticated, (req, res) => {
     user.id = user._id;
   }
   
+  console.log("Returning authenticated user:", user);
   res.json({ user });
 });
 

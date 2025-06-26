@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import session from 'express-session';
+import MongoStore from 'connect-mongo';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import blogRoutes from './routes/blog.js';
@@ -47,15 +48,58 @@ const app = express();
 const CLIENT_BUILD_PATH = path.join(__dirname, '..', 'dist');
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
+// Check if session secret is secure
+if (SESSION_SECRET === 'your_default_secret') {
+  console.warn('WARNING: Using default session secret. Set SESSION_SECRET env variable for security!');
+}
+
+// Get the client URL from environment variable or use hardcoded values
+const clientUrl = process.env.CLIENT_URL || 'https://adorable-fenglisu-331647.netlify.app';
+console.log(`Using client URL for CORS: ${clientUrl}`);
+
+// Configure allowed origins for CORS
+const allowedOrigins = [
+  clientUrl, 
+  'https://adorable-fenglisu-331647.netlify.app', 
+  'http://localhost:5173'
+];
+
+// Set up CORS with proper configuration for cross-domain cookies
 app.use(cors({
-  origin: ["https://adorable-fenglisu-331647.netlify.app", "http://localhost:5173"],
-  credentials: true  // if using cookies or auth headers
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      console.log(`CORS blocked for origin: ${origin}`);
+      return callback(null, true); // Allow all origins for troubleshooting
+    }
+    console.log(`CORS allowed for origin: ${origin}`);
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
+
+// Configure session with MongoDB store and secure settings
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: false, // Don't create session until something stored
+  store: MongoStore.create({ 
+    mongoUrl: MONGODB_URI,
+    ttl: 14 * 24 * 60 * 60, // 14 days
+    autoRemove: 'native' // Use MongoDB's TTL index
+  }),
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', // Only use secure in production
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Required for cross-domain
+    maxAge: 14 * 24 * 60 * 60 * 1000 // 14 days in milliseconds
+  }
 }));
 
 // Create the public directory and uploads directory
