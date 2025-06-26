@@ -105,6 +105,10 @@ router.post('/admin-register', async (req, res) => {
     const { username, email, password, role, inviteToken } = req.body;
     
     // Validate the invite token against the one in .env
+    console.log("Received token:", inviteToken);
+    console.log("Expected token:", process.env.ADMIN_INVITE_TOKEN);
+    console.log("Token match:", inviteToken === process.env.ADMIN_INVITE_TOKEN);
+    
     if (inviteToken !== process.env.ADMIN_INVITE_TOKEN) {
       return res.status(403).json({ message: 'Invalid invitation token' });
     }
