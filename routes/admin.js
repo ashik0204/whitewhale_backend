@@ -9,13 +9,19 @@ const router = express.Router();
 
 // Get all blog posts (including drafts)
 router.get('/posts', isAuthenticated, isAdmin, async (req, res) => {
+  console.log("GET /api/admin/posts - passed both authentication and admin checks");
+  console.log("User from request:", req.user);
+  console.log("User from session:", req.session?.user);
+  
   try {
     const posts = await BlogPost.find()
       .sort({ updatedAt: -1 })
       .populate('author', 'username');
-      
+    
+    console.log(`Found ${posts.length} posts`);  
     res.json(posts);
   } catch (error) {
+    console.error("Error fetching admin posts:", error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

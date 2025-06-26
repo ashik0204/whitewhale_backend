@@ -54,17 +54,30 @@ export const isAuthenticated = (req, res, next) => {
 
 // Check if user is admin
 export const isAdmin = (req, res, next) => {
-  if (req.session.user && req.session.user.role === 'admin') {
+  console.log("isAdmin middleware called");
+  console.log("req.user:", req.user);
+  console.log("req.session.user:", req.session?.user);
+  
+  // Check if user is admin in either req.user (JWT) or req.session.user (session)
+  if ((req.user && req.user.role === 'admin') || 
+      (req.session?.user && req.session.user.role === 'admin')) {
+    console.log("Admin access granted");
     return next();
   }
+  console.log("Admin access denied");
   res.status(403).json({ message: 'Admin access required' });
 };
 
 // Check if user is admin or editor
 export const isAdminOrEditor = (req, res, next) => {
-  if (req.session.user && 
-    (req.session.user.role === 'admin' || req.session.user.role === 'editor')) {
+  console.log("isAdminOrEditor middleware called");
+  
+  // Check if user is admin/editor in either req.user (JWT) or req.session.user (session)
+  if ((req.user && (req.user.role === 'admin' || req.user.role === 'editor')) ||
+      (req.session?.user && (req.session.user.role === 'admin' || req.session.user.role === 'editor'))) {
+    console.log("Admin/Editor access granted");
     return next();
   }
+  console.log("Admin/Editor access denied");
   res.status(403).json({ message: 'Admin or editor access required' });
 };
