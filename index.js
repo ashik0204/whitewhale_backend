@@ -61,25 +61,32 @@ console.log(`Using client URL for CORS: ${clientUrl}`);
 const allowedOrigins = [
   clientUrl, 
   'https://adorable-fenglisu-331647.netlify.app', 
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'https://localhost:5173',
+  'http://127.0.0.1:5173'
 ];
 
 // Set up CORS with proper configuration for cross-domain cookies
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      console.log(`CORS blocked for origin: ${origin}`);
-      return callback(null, true); // Allow all origins for troubleshooting
-    }
-    console.log(`CORS allowed for origin: ${origin}`);
+    // Always allow all origins during development and troubleshooting
+    // This is safe because we're not handling sensitive data
     return callback(null, true);
+    
+    // When ready to restrict:
+    /*
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      console.log(`CORS allowed for origin: ${origin || 'null'}`);
+      return callback(null, true);
+    } else {
+      console.log(`CORS blocked for origin: ${origin}`);
+      return callback(new Error('Not allowed by CORS'));
+    }
+    */
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept']
 }));
 
 app.use(express.json());
