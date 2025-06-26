@@ -61,6 +61,7 @@ router.post('/login', async (req, res) => {
     // Create a JWT token
     const tokenPayload = {
       id: user._id,
+      _id: user._id, // Include both formats for compatibility
       username: user.username,
       email: user.email,
       role: user.role
@@ -109,31 +110,71 @@ router.get('/me', isAuthenticated, (req, res) => {
   console.log("Session exists:", !!req.session);
   console.log("Session ID:", req.sessionID);
   console.log("Session user:", req.session?.user);
+  console.log("Request user (from middleware):", req.user);
+  console.log("Auth header:", req.headers.authorization);
   console.log("Cookies:", req.headers.cookie);
   
-  // Clone the session user object
-  const user = {...req.session.user};
-  
-  // Ensure consistent property naming (maintain both for backward compatibility)
-  if (user.id && !user._id) {
-    user._id = user.id;
-  } else if (user._id && !user.id) {
-    user.id = user._id;
+  // We can get the user info from the req.user that isAuthenticated middleware set
+  // This should work with both session or JWT token authentication
+  if (req.user) {
+    console.log("Using user from authentication middleware:", req.user);
+    // Return the user from the middleware
+    return res.json({ user: req.user });
   }
   
-  console.log("Returning authenticated user:", user);
-  res.json({ user });
+  // If for some reason req.user is not set (shouldn't happen), try session
+  if (req.session && req.session.user) {
+    // Clone the session user object
+    const user = {...req.session.user};
+    
+    // Ensure consistent property naming
+    if (user.id && !user._id) {
+      user._id = user.id;
+    } else if (user._id && !user.id) {
+      user.id = user._id;
+    }
+    
+    console.log("Using user from session:", user);
+    return res.json({ user });
+  }
+  
+  // This should never happen as isAuthenticated middleware would return 401 first
+  console.log("No user found in request or session - this is unexpected");
+  return res.status(401).json({ message: 'User not found in authenticated request' });
 });
 
 // Logout
 router.post('/logout', (req, res) => {
-  req.session.destroy(err => {
-    if (err) {
-      return res.status(500).json({ message: 'Logout failed' });
-    }
-    res.clearCookie('connect.sid');
-    res.json({ message: 'Logout successful' });
-  });
+  // Log logout attempt
+  console.log("Logout request received");
+  
+  // For session-based auth, destroy the session
+  if (req.session) {
+    req.session.destroy(err => {
+      if (err) {
+        console.error("Error destroying session:", err);
+      } else {
+        console.log("Session destroyed successfully");
+      }
+      
+      // Clear session cookie
+      res.clearCookie('connect.sid');
+      
+      // With JWT, the actual invalidation happens on the client side
+      // by removing the token from localStorage
+      res.json({ 
+        message: 'Logout successful',
+        info: 'Please remove JWT token from client storage'
+      });
+    });
+  } else {
+    // If no session exists, just return success
+    // The client will handle removing the JWT token
+    res.json({ 
+      message: 'Logout successful', 
+      info: 'No server session found, token-based auth logout handled on client'
+    });
+  }
 });
 
 // Admin registration endpoint with invite token validation

@@ -14,7 +14,9 @@ export const isAuthenticated = (req, res, next) => {
     console.log("User found in session");
     req.user = {
       id: req.session.user.id || req.session.user._id,
+      _id: req.session.user.id || req.session.user._id, // Include both formats
       username: req.session.user.username,
+      email: req.session.user.email,
       role: req.session.user.role
     };
     return next();
@@ -30,9 +32,12 @@ export const isAuthenticated = (req, res, next) => {
       const decoded = jwt.verify(token, jwtSecret);
       console.log("JWT token authenticated:", decoded);
       
+      // Make sure we include all user fields needed by the frontend
       req.user = {
         id: decoded.id,
+        _id: decoded.id, // Include both formats 
         username: decoded.username,
+        email: decoded.email,
         role: decoded.role
       };
       
